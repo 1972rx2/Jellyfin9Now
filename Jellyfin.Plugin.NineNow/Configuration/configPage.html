@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>9Now</title></head>
+<body>
+  <div id="NineNowConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-button,emby-select">
+    <div data-role="content"><div class="content-primary">
+      <h1>9Now</h1>
+      <p>Sign in using the official 9Now device activation flow. Your password is entered only on 9Now.</p>
+      <p>This plugin plays clear HLS streams returned by 9Now. DRM protected videos require a player and licence flow that Jellyfin does not provide here.</p>
+      <div class="inputContainer">
+        <button is="emby-button" type="button" class="raised button-submit block emby-button" id="signInButton"><span>Sign in to 9Now</span></button>
+        <button is="emby-button" type="button" class="raised block emby-button" id="checkStatusButton"><span>Check sign-in status</span></button>
+        <button is="emby-button" type="button" class="raised block emby-button" id="signOutButton"><span>Sign out</span></button>
+        <div id="loginInstructions" class="fieldDescription" style="display:none"></div>
+        <div id="loginStatus" class="fieldDescription" style="display:none"></div>
+      </div>
+      <div class="selectContainer">
+        <label class="selectLabel" for="Region">Live TV region</label>
+        <select is="emby-select" id="Region" class="emby-select-withcolor emby-select">
+          <option value="nsw">New South Wales</option><option value="vic">Victoria</option><option value="qld">Queensland</option>
+          <option value="sa">South Australia</option><option value="act">Australian Capital Territory</option><option value="nt">Northern Territory</option>
+          <option value="wa">Western Australia</option><option value="tas">Tasmania</option><option value="gold-coast">Gold Coast</option>
+          <option value="lismore">Northern Rivers</option><option value="newcastle">Newcastle</option>
+        </select>
+      </div>
+      <button is="emby-button" type="button" class="raised button-submit block emby-button" id="saveButton"><span>Save</span></button>
+    </div></div>
+    <script>
+    (() => {
+      const page = document.querySelector('#NineNowConfigPage');
+      const pluginId = 'a82ad2b4-48d8-4a74-8d92-4ba3f19e72d1';
+      let loginTimer;
+      let pollInFlight = false;
+      page.addEventListener('pagehide', () => clearInterval(loginTimer));
+      page.addEventListener('pageshow', () => ApiClient.getPluginConfiguration(pluginId).then(config => {
+        document.querySelector('#Region').value = config.Region || 'nsw';
+      }).then(() => checkLoginStatus()));
+      document.querySelector('#saveButton').addEventListener('click', () => ApiClient.getPluginConfiguration(pluginId).then(config => {
+        config.Region = document.querySelector('#Region').value;
+        return ApiClient.updatePluginConfiguration(pluginId, config);
+      }).then(Dashboard.processPluginConfigurationUpdateResult));
+
+      document.querySelector('#signInButton').addEventListener('click', async () => {
+        const instructions = document.querySelector('#loginInstructions');
+        const statusMessage = document.querySelector('#loginStatus');
+        clearInterval(loginTimer);
+        Dashboard.showLoadingMsg();
+        try {
+          const response = await ApiClient.fetch({ type: 'POST', url: ApiClient.getUrl('NineNow/Auth/start') });
+          if (typeof response.ok === 'boolean' && !response.ok) throw new Error('Could not create a device code.');
+          const start = typeof response.json === 'function' ? await response.json() : response;
+          const authCode = start.authCode || start.AuthCode;
+          const deviceCode = start.deviceCode || start.DeviceCode;
+          const expiry = start.expiresAtUnixSeconds || start.ExpiresAtUnixSeconds;
+          const pollInterval = (start.pollIntervalSeconds || start.PollIntervalSeconds || 5) * 1000;
+          const activation = start.activationUrl || start.ActivationUrl || 'https://9now.com.au/activate';
+          const link = document.createElement('a');
+          link.href = activation;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          link.textContent = activation;
+          instructions.replaceChildren('Open ', link, ' and enter code ', authCode, '. Waiting for approval…');
+          instructions.style.display = 'block';
+          statusMessage.textContent = '';
+          statusMessage.style.display = 'none';
+          const timer = loginTimer = setInterval(async () => {
+            if (pollInFlight) return;
+            if (Math.floor(Date.now() / 1000) >= expiry) {
+              clearInterval(timer);
+              statusMessage.textContent = 'The code expired. Select Sign in to create a new one.';
+              statusMessage.style.display = 'block';
+              return;
+            }
+            try {
+              pollInFlight = true;
+              const resultResponse = await ApiClient.fetch({
+                type: 'POST', url: ApiClient.getUrl('NineNow/Auth/complete'), contentType: 'application/json',
+                data: JSON.stringify({ authCode: authCode, deviceCode: deviceCode })
+              });
+              if (typeof resultResponse.ok === 'boolean' && !resultResponse.ok) throw new Error('Could not check sign-in.');
+              const result = typeof resultResponse.json === 'function' ? await resultResponse.json() : resultResponse;
+              if (result.complete || result.Complete) {
+                clearInterval(timer);
+                statusMessage.textContent = '9Now sign-in complete.';
+                statusMessage.style.display = 'block';
+                return;
+              }
+              const detail = result.detail || result.Detail;
+              if (detail) { statusMessage.textContent = detail; statusMessage.style.display = 'block'; }
+            } catch (error) {
+              statusMessage.textContent = 'Could not check sign-in. Approval has not been confirmed. Retrying…';
+              statusMessage.style.display = 'block';
+              console.error('9Now device login polling failed', error);
+            } finally {
+              pollInFlight = false;
+            }
+          }, pollInterval);
+        } catch (error) {
+          statusMessage.textContent = 'Could not create a 9Now device code. Check the Jellyfin server log and try again.';
+          statusMessage.style.display = 'block';
+          console.error('9Now device login start failed', error);
+        } finally {
+          Dashboard.hideLoadingMsg();
+        }
+      });
+
+      document.querySelector('#checkStatusButton').addEventListener('click', () => checkLoginStatus(true));
+      document.querySelector('#signOutButton').addEventListener('click', async () => {
+        const statusMessage = document.querySelector('#loginStatus');
+        try {
+          const response = await ApiClient.fetch({ type: 'POST', url: ApiClient.getUrl('NineNow/Auth/logout') });
+          if (typeof response.ok === 'boolean' && !response.ok) throw new Error('Sign out failed.');
+          statusMessage.textContent = '9Now signed out.';
+          statusMessage.style.display = 'block';
+        } catch (error) {
+          statusMessage.textContent = 'Could not sign out of 9Now.';
+          statusMessage.style.display = 'block';
+          console.error('9Now sign out failed', error);
+        }
+      });
+
+      async function checkLoginStatus(showPending) {
+        const statusMessage = document.querySelector('#loginStatus');
+        try {
+          const response = await ApiClient.fetch({ url: ApiClient.getUrl('NineNow/Auth/status') });
+          if (typeof response.ok === 'boolean' && !response.ok) throw new Error('Status request failed.');
+          const status = typeof response.json === 'function' ? await response.json() : response;
+          statusMessage.textContent = status.complete || status.Complete ? '9Now sign-in complete.' : '9Now is not signed in.';
+          statusMessage.style.display = showPending || status.complete || status.Complete ? 'block' : 'none';
+          return status.complete || status.Complete;
+        } catch (error) {
+          if (showPending) {
+            statusMessage.textContent = 'Jellyfin could not check the sign-in state. Restart Jellyfin after updating the plugin, then try again.';
+            statusMessage.style.display = 'block';
+          }
+          console.error('9Now sign-in status check failed', error);
+          return false;
+        }
+      }
+    })();
+    </script>
+  </div>
+</body>
+</html>
