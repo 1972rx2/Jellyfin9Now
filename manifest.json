@@ -1,0 +1,20 @@
+[
+  {
+    "category": "Channels",
+    "guid": "a82ad2b4-48d8-4a74-8d92-4ba3f19e72d1",
+    "name": "9Now",
+    "description": "Browse 9Now catch-up shows and regional live TV in Jellyfin.",
+    "overview": "Australian catch-up and live TV from 9Now.",
+    "owner": "1972rx2",
+    "versions": [
+      {
+        "version": "0.1.0.0",
+        "changelog": "Initial Jellyfin 12.4 test build.",
+        "targetAbi": "12.4.0.0",
+        "sourceUrl": "https://raw.githubusercontent.com/1972rx2/Jellyfin9Now/26c427a89df8781b59fecb165993e538a7420c9f/Jellyfin.Plugin.NineNow-0.1.0-jellyfin12.4-test.zip",
+        "checksum": "63d433397aab76e1f70d626945305410a704eb77f8ad0285a1838f95e12a5882",
+        "timestamp": "2026-11-17 16:41:10"
+      }
+    ]
+  }
+]
