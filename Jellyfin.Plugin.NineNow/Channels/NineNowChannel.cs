@@ -94,8 +94,7 @@ public sealed class NineNowChannel : IChannel, IRequiresMediaInfoCallback
         {
             string showSlug = DecodeId(folderId["show:".Length..]);
             using JsonDocument document = await NineNowApiClient.GetShowAsync(showSlug, cancellationToken).ConfigureAwait(false);
-            JsonElement show = document.RootElement.GetProperty("tvSeries");
-            items = ParseSeasons(showSlug, show);
+            items = ParseSeasons(showSlug, document.RootElement);
         }
         else if (folderId.StartsWith("season:", StringComparison.Ordinal))
         {
@@ -105,9 +104,21 @@ public sealed class NineNowChannel : IChannel, IRequiresMediaInfoCallback
                 throw new InvalidOperationException("This 9Now season link is invalid. Reopen the show to refresh it.");
             }
 
-            using JsonDocument document = await NineNowApiClient.GetEpisodesAsync(DecodeId(parts[1]), DecodeId(parts[2]), cancellationToken).ConfigureAwait(false);
-            JsonElement episodes = document.RootElement.TryGetProperty("episodes", out JsonElement episodeList) ? episodeList : document.RootElement;
-            items = ParseVideos(GetArray(episodes, "items"));
+            string showSlug = DecodeId(parts[1]);
+            string seasonSlug = DecodeId(parts[2]);
+            using JsonDocument document = await NineNowApiClient.GetEpisodesAsync(showSlug, seasonSlug, cancellationToken).ConfigureAwait(false);
+            JsonElement episodeRows = document.RootElement.TryGetProperty("episodes", out JsonElement episodeList)
+                ? GetArray(episodeList, "items")
+                : default;
+            if (episodeRows.ValueKind == JsonValueKind.Array && episodeRows.GetArrayLength() > 0)
+            {
+                items = ParseVideos(episodeRows);
+            }
+            else
+            {
+                using JsonDocument clips = await NineNowApiClient.GetClipsAsync(showSlug, seasonSlug, cancellationToken).ConfigureAwait(false);
+                items = ParseVideos(GetArray(GetArray(clips.RootElement, "clips"), "items"));
+            }
         }
         else if (string.Equals(folderId, "live", StringComparison.Ordinal))
         {
@@ -277,10 +288,14 @@ public sealed class NineNowChannel : IChannel, IRequiresMediaInfoCallback
         return items;
     }
 
-    private static List<ChannelItemInfo> ParseSeasons(string showSlug, JsonElement show)
+    private static List<ChannelItemInfo> ParseSeasons(string showSlug, JsonElement page)
     {
         var items = new List<ChannelItemInfo>();
-        if (!show.TryGetProperty("seasons", out JsonElement seasons) || seasons.ValueKind != JsonValueKind.Array)
+        JsonElement show = page.TryGetProperty("tvSeries", out JsonElement tvSeries) ? tvSeries : page;
+        JsonElement seasons = page.TryGetProperty("seasons", out JsonElement pageSeasons)
+            ? pageSeasons
+            : GetArray(show, "seasons");
+        if (seasons.ValueKind != JsonValueKind.Array)
         {
             return items;
         }

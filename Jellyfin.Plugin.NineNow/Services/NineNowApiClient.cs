@@ -62,6 +62,14 @@ public static class NineNowApiClient
         return await GetJsonAsync(BuildUrl(path, ("device", "web"), ("sort", string.Empty)), true, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>Gets clips for a season that does not have full episodes.</summary>
+    public static async Task<JsonDocument> GetClipsAsync(string showSlug, string seasonSlug, CancellationToken cancellationToken)
+    {
+        await EnsureFreshTokenAsync(cancellationToken).ConfigureAwait(false);
+        string path = ApiBaseUrl + "/tv-series/" + Uri.EscapeDataString(showSlug) + "/seasons/" + Uri.EscapeDataString(seasonSlug) + "/clips";
+        return await GetJsonAsync(BuildUrl(path, ("device", "web"), ("sort", string.Empty), ("tagSlug", string.Empty)), true, cancellationToken).ConfigureAwait(false);
+    }
+
     /// <summary>Gets 9Now genres.</summary>
     public static async Task<JsonDocument> GetGenresAsync(CancellationToken cancellationToken)
     {
@@ -153,13 +161,74 @@ public static class NineNowApiClient
             if (row.TryGetProperty("stream", out JsonElement stream) && GetString(stream, "url") is string streamUrl
                 && Uri.TryCreate(streamUrl, UriKind.Absolute, out Uri? streamUri) && streamUri.Scheme == Uri.UriSchemeHttps)
             {
-                return streamUri.ToString();
+                return ResolveLiveStreamUrl(streamUri);
             }
 
             throw new InvalidOperationException("9Now did not provide a live stream URL for this channel.");
         }
 
         throw new InvalidOperationException("This 9Now live channel is no longer available in the selected region.");
+    }
+
+    private static string ResolveLiveStreamUrl(Uri streamUri)
+    {
+        string? encodedDirectUrl = GetQueryParameter(streamUri, "yo.eb.fb");
+        if (TryDecodeBase64(encodedDirectUrl, out string directUrl)
+            && Uri.TryCreate(directUrl, UriKind.Absolute, out Uri? directUri)
+            && directUri.Scheme == Uri.UriSchemeHttps)
+        {
+            return directUri.ToString();
+        }
+
+        string? encodedPlaybackParams = GetQueryParameter(streamUri, "yo.pp");
+        string? streamBaseUrl = GetQueryParameter(streamUri, "yo.up");
+        if (TryDecodeBase64(encodedPlaybackParams, out string playbackParams)
+            && !string.IsNullOrWhiteSpace(streamBaseUrl))
+        {
+            string baseUrl = streamBaseUrl.EndsWith('/') ? streamBaseUrl : streamBaseUrl + "/";
+            string resolvedUrl = baseUrl + "index.m3u8?" + playbackParams;
+            if (Uri.TryCreate(resolvedUrl, UriKind.Absolute, out Uri? resolvedUri) && resolvedUri.Scheme == Uri.UriSchemeHttps)
+            {
+                return resolvedUri.ToString();
+            }
+        }
+
+        return streamUri.ToString();
+    }
+
+    private static string? GetQueryParameter(Uri uri, string name)
+    {
+        foreach (string pair in uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            string[] parts = pair.Split('=', 2);
+            if (string.Equals(Uri.UnescapeDataString(parts[0]), name, StringComparison.Ordinal))
+            {
+                return parts.Length > 1 ? Uri.UnescapeDataString(parts[1]) : string.Empty;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool TryDecodeBase64(string? value, out string decoded)
+    {
+        decoded = string.Empty;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        try
+        {
+            string normalized = value.Replace('-', '+').Replace('_', '/').Replace(' ', '+');
+            normalized = normalized.PadRight(normalized.Length + ((4 - normalized.Length % 4) % 4), '=');
+            decoded = Encoding.UTF8.GetString(Convert.FromBase64String(normalized));
+            return true;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
     }
 
     /// <summary>Starts the provider's device-code sign-in flow.</summary>

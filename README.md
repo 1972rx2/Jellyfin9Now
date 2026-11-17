@@ -7,9 +7,9 @@ An early Jellyfin 12.4 channel plugin for browsing 9Now with Nine's TV device-co
 ## Included in this build
 
 - Sign in at `9now.com.au/activate` from the Jellyfin dashboard. The plugin stores the returned access and refresh tokens in Jellyfin's local plugin configuration.
-- Browse Featured rails, Shows, Categories, seasons, and episodes.
+- Browse Featured rails, Shows, Categories, seasons, episodes, and clips.
 - Browse region-specific Live TV channels.
-- Resolve a video to the clear HLS source returned by Brightcove when available.
+- Resolve live HLS stream URLs and clear video HLS sources when available.
 - Refresh an expired access token using Nine's refresh-token endpoint.
 
 Playback is limited to clear HLS sources. Videos marked DRM-protected by 9Now are not decrypted by this plugin. Ads and other provider stream behavior are left as returned by 9Now. The live-region setting defaults to New South Wales.

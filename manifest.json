@@ -8,6 +8,14 @@
     "owner": "1972rx2",
     "versions": [
       {
+        "version": "0.1.1.0",
+        "changelog": "Fix show seasons, include season clips, and resolve live HLS URLs.",
+        "targetAbi": "12.4.0.0",
+        "sourceUrl": "https://raw.githubusercontent.com/1972rx2/Jellyfin9Now/main/Jellyfin.Plugin.NineNow-0.1.1-jellyfin12.4-test.zip",
+        "checksum": "89a9284962825a414e11e395ae8f5731",
+        "timestamp": "2026-11-17 17:02:32"
+      },
+      {
         "version": "0.1.0.0",
         "changelog": "Initial Jellyfin 12.4 test build.",
         "targetAbi": "12.4.0.0",
