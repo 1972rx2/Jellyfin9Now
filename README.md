@@ -1,4 +1,6 @@
-# Jellyfin 9Now plugin (test build)
+# Jellyfin9Now
+
+9Now Plugin for Jellyfin — early Jellyfin 12.4 test build with Nine TV device-code sign-in.
 
 An early Jellyfin 12.4 channel plugin for browsing 9Now with Nine's TV device-code sign-in.
 
