@@ -4,6 +4,7 @@
 <body>
   <div id="NineNowConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-button,emby-select">
     <div data-role="content"><div class="content-primary">
+      <img id="nineNowLogo" alt="9Now" style="display:block;width:100%;max-width:320px;height:auto;margin:0 auto 20px;" />
       <h1>9Now</h1>
       <p>Sign in using the official 9Now device activation flow. Your password is entered only on 9Now.</p>
       <p>This plugin plays clear HLS streams returned by 9Now. DRM protected videos require a player and licence flow that Jellyfin does not provide here.</p>
@@ -29,6 +30,9 @@
     (() => {
       const page = document.querySelector('#NineNowConfigPage');
       const pluginId = 'a82ad2b4-48d8-4a74-8d92-4ba3f19e72d1';
+      const logo = document.querySelector('#nineNowLogo');
+      logo.src = ApiClient.getUrl(`Plugins/${pluginId}/0.1.2.0/Image`);
+      logo.addEventListener('error', () => logo.remove());
       let loginTimer;
       let pollInFlight = false;
       page.addEventListener('pagehide', () => clearInterval(loginTimer));

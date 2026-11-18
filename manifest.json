@@ -6,7 +6,16 @@
     "description": "Browse 9Now catch-up shows and regional live TV in Jellyfin.",
     "overview": "Australian catch-up and live TV from 9Now.",
     "owner": "1972rx2",
+    "imageUrl": "https://raw.githubusercontent.com/1972rx2/Jellyfin9Now/main/assets/9now-logo.png",
     "versions": [
+      {
+        "version": "0.1.2.0",
+        "changelog": "Refresh channel cache after updates and add 9Now branding to the catalog and dashboard.",
+        "targetAbi": "12.4.0.0",
+        "sourceUrl": "https://raw.githubusercontent.com/1972rx2/Jellyfin9Now/main/Jellyfin.Plugin.NineNow-0.1.2-jellyfin12.4-test.zip",
+        "checksum": "e7d2ad6759ec552511598706b83a1806",
+        "timestamp": "2026-11-18 01:10:17"
+      },
       {
         "version": "0.1.1.0",
         "changelog": "Fix show seasons, include season clips, and resolve live HLS URLs.",

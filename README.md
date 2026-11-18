@@ -1,6 +1,6 @@
 # Jellyfin9Now
 
-9Now Plugin for Jellyfin — early Jellyfin 12.4 test build with Nine TV device-code sign-in.
+9Now Plugin for Jellyfin — early Jellyfin 12.4 test build with Nine TV device-code sign-in and 9Now branding.
 
 An early Jellyfin 12.4 channel plugin for browsing 9Now with Nine's TV device-code sign-in.
 
@@ -28,7 +28,7 @@ Then open **Catalog**, install **9Now**, and restart Jellyfin. This build target
 
 ## Manual install
 
-1. Extract `Jellyfin.Plugin.NineNow.dll` from `Jellyfin.Plugin.NineNow-0.1.0-jellyfin12.4-test.zip` into a new `NineNow` directory under Jellyfin's plugins directory.
+1. Extract `Jellyfin.Plugin.NineNow.dll` from `Jellyfin.Plugin.NineNow-0.1.2-jellyfin12.4-test.zip` into a new `NineNow` directory under Jellyfin's plugins directory.
 2. Restart Jellyfin.
 3. In the dashboard, open **Plugins → 9Now**, select **Sign in to 9Now**, then enter the displayed code at `https://9now.com.au/activate` using your own Nine account.
 4. Wait for the dashboard to confirm sign-in, choose your Live TV region if needed, and save.

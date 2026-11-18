@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -15,12 +16,21 @@ using MediaBrowser.Model.Drawing;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.MediaInfo;
+using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.NineNow.Channels;
 
 /// <summary>The browseable 9Now channel.</summary>
-public sealed class NineNowChannel : IChannel, IRequiresMediaInfoCallback
+public sealed partial class NineNowChannel : IChannel, IRequiresMediaInfoCallback
 {
+    private readonly ILogger<NineNowChannel> _logger;
+
+    /// <summary>Initializes a new instance of the <see cref="NineNowChannel"/> class.</summary>
+    public NineNowChannel(ILogger<NineNowChannel> logger)
+    {
+        _logger = logger;
+    }
+
     /// <inheritdoc />
     public string Name => "9Now";
 
@@ -31,7 +41,7 @@ public sealed class NineNowChannel : IChannel, IRequiresMediaInfoCallback
     public string HomePageUrl => "https://www.9now.com.au/";
 
     /// <inheritdoc />
-    public string DataVersion => "1";
+    public string DataVersion => typeof(NineNowChannel).Assembly.GetName().Version?.ToString() ?? "1";
 
     /// <inheritdoc />
     public ChannelParentalRating ParentalRating => ChannelParentalRating.GeneralAudience;
@@ -66,6 +76,22 @@ public sealed class NineNowChannel : IChannel, IRequiresMediaInfoCallback
                 CreateFolder("categories", "Categories"),
                 CreateFolder("live", "Live TV"),
             ];
+            try
+            {
+                using JsonDocument document = await NineNowApiClient.GetFeaturedAsync(cancellationToken).ConfigureAwait(false);
+                foreach (JsonElement row in GetArray(document.RootElement, "items").EnumerateArray())
+                {
+                    if (GetString(row, "type") == "featured-rail")
+                    {
+                        items.AddRange(ParseContentRows(GetArray(row, "items")).Take(8));
+                        break;
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException)
+            {
+                LogFeaturedHomeLoadFailed(_logger, ex);
+            }
         }
         else if (string.Equals(folderId, "featured", StringComparison.Ordinal))
         {
@@ -188,7 +214,10 @@ public sealed class NineNowChannel : IChannel, IRequiresMediaInfoCallback
         var items = new List<ChannelItemInfo>();
         foreach (JsonElement row in GetArray(document.RootElement, "items").EnumerateArray())
         {
-            if (GetString(row, "type") == "featured-rail" && GetString(row, "id") is string id && GetString(row, "title") is string title)
+            if (GetArray(row, "items").ValueKind == JsonValueKind.Array
+                && GetArray(row, "items").GetArrayLength() > 0
+                && GetString(row, "id") is string id
+                && GetString(row, "title") is string title)
             {
                 items.Add(CreateFolder("rail:" + EncodeId(id), title, GetImage(row, "w768"), GetString(row, "description")));
             }
@@ -487,4 +516,7 @@ public sealed class NineNowChannel : IChannel, IRequiresMediaInfoCallback
         base64 = base64.PadRight(base64.Length + ((4 - base64.Length % 4) % 4), '=');
         return Encoding.UTF8.GetString(Convert.FromBase64String(base64));
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Could not load 9Now featured items for the channel home page.")]
+    private static partial void LogFeaturedHomeLoadFailed(ILogger logger, Exception exception);
 }
