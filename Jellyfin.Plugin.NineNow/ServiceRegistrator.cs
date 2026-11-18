@@ -1,4 +1,5 @@
 using Jellyfin.Plugin.NineNow.Channels;
+using Jellyfin.Plugin.NineNow.Services;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Channels;
 using MediaBrowser.Controller.Plugins;
@@ -13,6 +14,7 @@ public sealed class ServiceRegistrator : IPluginServiceRegistrator
     /// <inheritdoc />
     public void RegisterServices(IServiceCollection serviceCollection, IServerApplicationHost applicationHost)
     {
+        serviceCollection.TryAddSingleton<DrmThumbnailRenderer>();
         serviceCollection.TryAddEnumerable(ServiceDescriptor.Singleton<IChannel, NineNowChannel>());
     }
 }

@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/1972rx2/Jellyfin9Now/main/assets/9now-logo.png",
     "versions": [
       {
+        "version": "0.1.4.0",
+        "changelog": "Show a DRM badge on episodes that Nine marks as protected.",
+        "targetAbi": "12.4.0.0",
+        "sourceUrl": "https://raw.githubusercontent.com/1972rx2/Jellyfin9Now/main/Jellyfin.Plugin.NineNow-0.1.4-jellyfin12.4-test.zip",
+        "checksum": "3e66d0e7117df4e15d3da818a68b9026",
+        "timestamp": "2026-11-18 03:01:28"
+      },
+      {
         "version": "0.1.3.0",
         "changelog": "Keep the saved refresh token when Nine does not rotate it and add the 9Now channel tile logo.",
         "targetAbi": "12.4.0.0",

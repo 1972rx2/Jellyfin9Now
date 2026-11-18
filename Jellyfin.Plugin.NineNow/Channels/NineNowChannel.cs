@@ -25,11 +25,13 @@ public sealed partial class NineNowChannel : IChannel, IRequiresMediaInfoCallbac
 {
     private const string ChannelLogoResource = "Jellyfin.Plugin.NineNow.Assets.NineNowLogo.png";
     private readonly ILogger<NineNowChannel> _logger;
+    private readonly DrmThumbnailRenderer _drmThumbnailRenderer;
 
     /// <summary>Initializes a new instance of the <see cref="NineNowChannel"/> class.</summary>
-    public NineNowChannel(ILogger<NineNowChannel> logger)
+    public NineNowChannel(ILogger<NineNowChannel> logger, DrmThumbnailRenderer drmThumbnailRenderer)
     {
         _logger = logger;
+        _drmThumbnailRenderer = drmThumbnailRenderer;
     }
 
     /// <inheritdoc />
@@ -84,7 +86,7 @@ public sealed partial class NineNowChannel : IChannel, IRequiresMediaInfoCallbac
                 {
                     if (GetString(row, "type") == "featured-rail")
                     {
-                        items.AddRange(ParseContentRows(GetArray(row, "items")).Take(8));
+                        items.AddRange((await ParseContentRowsAsync(GetArray(row, "items"), cancellationToken).ConfigureAwait(false)).Take(8));
                         break;
                     }
                 }
@@ -139,12 +141,12 @@ public sealed partial class NineNowChannel : IChannel, IRequiresMediaInfoCallbac
                 : default;
             if (episodeRows.ValueKind == JsonValueKind.Array && episodeRows.GetArrayLength() > 0)
             {
-                items = ParseVideos(episodeRows);
+                items = await ParseVideosAsync(episodeRows, cancellationToken).ConfigureAwait(false);
             }
             else
             {
                 using JsonDocument clips = await NineNowApiClient.GetClipsAsync(showSlug, seasonSlug, cancellationToken).ConfigureAwait(false);
-                items = ParseVideos(GetArray(GetArray(clips.RootElement, "clips"), "items"));
+                items = await ParseVideosAsync(GetArray(GetArray(clips.RootElement, "clips"), "items"), cancellationToken).ConfigureAwait(false);
             }
         }
         else if (string.Equals(folderId, "live", StringComparison.Ordinal))
@@ -193,6 +195,10 @@ public sealed partial class NineNowChannel : IChannel, IRequiresMediaInfoCallbac
         {
             manifest = await NineNowApiClient.GetPlaybackAsync(DecodeId(id["video:".Length..]), cancellationToken).ConfigureAwait(false);
         }
+        else if (id.StartsWith("drmvideo:", StringComparison.Ordinal))
+        {
+            manifest = await NineNowApiClient.GetPlaybackAsync(DecodeId(id["drmvideo:".Length..]), cancellationToken).ConfigureAwait(false);
+        }
         else if (id.StartsWith("liveitem:", StringComparison.Ordinal))
         {
             string region = NineNowPlugin.Instance?.Configuration.Region ?? "nsw";
@@ -238,21 +244,21 @@ public sealed partial class NineNowChannel : IChannel, IRequiresMediaInfoCallbac
         return items;
     }
 
-    private static async Task<List<ChannelItemInfo>> GetFeaturedItemsAsync(string railId, CancellationToken cancellationToken)
+    private async Task<List<ChannelItemInfo>> GetFeaturedItemsAsync(string railId, CancellationToken cancellationToken)
     {
         using JsonDocument document = await NineNowApiClient.GetFeaturedAsync(cancellationToken).ConfigureAwait(false);
         foreach (JsonElement row in GetArray(document.RootElement, "items").EnumerateArray())
         {
             if (string.Equals(GetString(row, "id"), railId, StringComparison.Ordinal))
             {
-                return ParseContentRows(GetArray(row, "items"));
+                return await ParseContentRowsAsync(GetArray(row, "items"), cancellationToken).ConfigureAwait(false);
             }
         }
 
         return [];
     }
 
-    private static List<ChannelItemInfo> ParseContentRows(JsonElement rows)
+    private async Task<List<ChannelItemInfo>> ParseContentRowsAsync(JsonElement rows, CancellationToken cancellationToken)
     {
         var items = new List<ChannelItemInfo>();
         foreach (JsonElement row in rows.EnumerateArray())
@@ -267,7 +273,7 @@ public sealed partial class NineNowChannel : IChannel, IRequiresMediaInfoCallbac
             }
             else if (linkType is "episode" or "clip" || row.TryGetProperty("video", out _))
             {
-                if (ParseVideo(row) is ChannelItemInfo video)
+                if (await ParseVideoAsync(row, cancellationToken).ConfigureAwait(false) is ChannelItemInfo video)
                 {
                     items.Add(video);
                 }
@@ -358,7 +364,7 @@ public sealed partial class NineNowChannel : IChannel, IRequiresMediaInfoCallbac
         return items;
     }
 
-    private static List<ChannelItemInfo> ParseVideos(JsonElement rows)
+    private async Task<List<ChannelItemInfo>> ParseVideosAsync(JsonElement rows, CancellationToken cancellationToken)
     {
         var items = new List<ChannelItemInfo>();
         if (rows.ValueKind != JsonValueKind.Array)
@@ -368,7 +374,7 @@ public sealed partial class NineNowChannel : IChannel, IRequiresMediaInfoCallbac
 
         foreach (JsonElement row in rows.EnumerateArray())
         {
-            if (ParseVideo(row) is ChannelItemInfo item)
+            if (await ParseVideoAsync(row, cancellationToken).ConfigureAwait(false) is ChannelItemInfo item)
             {
                 items.Add(item);
             }
@@ -377,7 +383,7 @@ public sealed partial class NineNowChannel : IChannel, IRequiresMediaInfoCallbac
         return items;
     }
 
-    private static ChannelItemInfo? ParseVideo(JsonElement row)
+    private async Task<ChannelItemInfo?> ParseVideoAsync(JsonElement row, CancellationToken cancellationToken)
     {
         if (!row.TryGetProperty("video", out JsonElement video))
         {
@@ -392,21 +398,27 @@ public sealed partial class NineNowChannel : IChannel, IRequiresMediaInfoCallbac
         }
 
         string? overview = GetString(row, "description");
-        if (GetBoolean(video, "drm"))
+        bool isDrm = GetBoolean(video, "drm") || GetBoolean(row, "drm");
+        string? imageUrl = GetImage(row, "w768");
+        if (isDrm)
         {
             overview = string.IsNullOrWhiteSpace(overview)
                 ? "This episode is marked as DRM-protected by 9Now and may not play in Jellyfin."
                 : overview + Environment.NewLine + Environment.NewLine + "This episode is marked as DRM-protected by 9Now and may not play in Jellyfin.";
+            if (Uri.TryCreate(imageUrl, UriKind.Absolute, out Uri? imageUri))
+            {
+                imageUrl = await _drmThumbnailRenderer.RenderAsync(imageUri, cancellationToken).ConfigureAwait(false) ?? imageUrl;
+            }
         }
 
         return new ChannelItemInfo
         {
-            Id = "video:" + EncodeId(reference),
-            Name = name,
+            Id = (isDrm ? "drmvideo:" : "video:") + EncodeId(reference),
+            Name = isDrm ? "[DRM] " + name : name,
             Type = ChannelItemType.Media,
             MediaType = ChannelMediaType.Video,
             ContentType = ChannelMediaContentType.Episode,
-            ImageUrl = GetImage(row, "w768"),
+            ImageUrl = imageUrl,
             Overview = overview,
             PremiereDate = GetDate(row, "airDate"),
         };
