@@ -31,7 +31,7 @@
       const page = document.querySelector('#NineNowConfigPage');
       const pluginId = 'a82ad2b4-48d8-4a74-8d92-4ba3f19e72d1';
       const logo = document.querySelector('#nineNowLogo');
-      logo.src = ApiClient.getUrl(`Plugins/${pluginId}/0.1.2.0/Image`);
+      logo.src = ApiClient.getUrl(`Plugins/${pluginId}/0.1.3.0/Image`);
       logo.addEventListener('error', () => logo.remove());
       let loginTimer;
       let pollInFlight = false;

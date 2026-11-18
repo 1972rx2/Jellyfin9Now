@@ -333,7 +333,7 @@ public static class NineNowApiClient
                 throw new InvalidOperationException("9Now session refresh failed: " + (error.GetString() ?? "sign in again"));
             }
 
-            SaveTokens(configuration, tokens.RootElement);
+            SaveTokens(configuration, tokens.RootElement, configuration.RefreshToken);
             NineNowPlugin.Instance!.SaveConfiguration(configuration);
         }
         finally
@@ -342,20 +342,33 @@ public static class NineNowApiClient
         }
     }
 
-    private static void SaveTokens(PluginConfiguration configuration, JsonElement token)
+    private static void SaveTokens(PluginConfiguration configuration, JsonElement token, string? previousRefreshToken = null)
     {
-        string accessToken = GetString(token, "accessToken") ?? string.Empty;
-        string? refreshToken = GetString(token, "refresh_token") ?? GetString(token, "refreshToken");
-        decimal seconds;
-        JsonElement expiry = token.TryGetProperty("expiresIn", out JsonElement camelExpiry) ? camelExpiry : default;
+        string accessToken = GetString(token, "accessToken") ?? GetString(token, "access_token") ?? string.Empty;
+        string? updatedRefreshToken = GetString(token, "refresh_token") ?? GetString(token, "refreshToken");
+        string? refreshToken = string.IsNullOrWhiteSpace(updatedRefreshToken) ? previousRefreshToken : updatedRefreshToken;
+        JsonElement expiry = token.TryGetProperty("expiresIn", out JsonElement camelExpiry)
+            ? camelExpiry
+            : token.TryGetProperty("expires_in", out JsonElement snakeExpiry) ? snakeExpiry : default;
+        decimal seconds = 0;
         bool validExpiry = expiry.ValueKind == JsonValueKind.Number
             ? expiry.TryGetDecimal(out seconds)
-            : decimal.TryParse(GetString(token, "expiresIn"), NumberStyles.Float, CultureInfo.InvariantCulture, out seconds);
+            : expiry.ValueKind == JsonValueKind.String
+                && decimal.TryParse(expiry.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture, out seconds);
         long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        if (!validExpiry || seconds <= 0 || seconds > DateTimeOffset.MaxValue.ToUnixTimeSeconds() - now
-            || string.IsNullOrWhiteSpace(accessToken) || string.IsNullOrWhiteSpace(refreshToken))
+        if (string.IsNullOrWhiteSpace(accessToken))
         {
-            throw new InvalidOperationException("Nine returned an invalid account session or token expiry.");
+            throw new InvalidOperationException("Nine did not return an access token.");
+        }
+
+        if (string.IsNullOrWhiteSpace(refreshToken))
+        {
+            throw new InvalidOperationException("Nine did not return a refresh token.");
+        }
+
+        if (!validExpiry || seconds <= 0 || seconds > DateTimeOffset.MaxValue.ToUnixTimeSeconds() - now)
+        {
+            throw new InvalidOperationException("Nine returned an invalid account token expiry.");
         }
 
         configuration.AccessToken = accessToken;

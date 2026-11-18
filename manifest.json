@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/1972rx2/Jellyfin9Now/main/assets/9now-logo.png",
     "versions": [
       {
+        "version": "0.1.3.0",
+        "changelog": "Keep the saved refresh token when Nine does not rotate it and add the 9Now channel tile logo.",
+        "targetAbi": "12.4.0.0",
+        "sourceUrl": "https://raw.githubusercontent.com/1972rx2/Jellyfin9Now/main/Jellyfin.Plugin.NineNow-0.1.3-jellyfin12.4-test.zip",
+        "checksum": "1c4bf0b84a2a38a000a336a5b0badfb5",
+        "timestamp": "2026-11-18 02:15:28"
+      },
+      {
         "version": "0.1.2.0",
         "changelog": "Refresh channel cache after updates and add 9Now branding to the catalog and dashboard.",
         "targetAbi": "12.4.0.0",

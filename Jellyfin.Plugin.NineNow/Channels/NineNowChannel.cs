@@ -23,6 +23,7 @@ namespace Jellyfin.Plugin.NineNow.Channels;
 /// <summary>The browseable 9Now channel.</summary>
 public sealed partial class NineNowChannel : IChannel, IRequiresMediaInfoCallback
 {
+    private const string ChannelLogoResource = "Jellyfin.Plugin.NineNow.Assets.NineNowLogo.png";
     private readonly ILogger<NineNowChannel> _logger;
 
     /// <summary>Initializes a new instance of the <see cref="NineNowChannel"/> class.</summary>
@@ -164,12 +165,23 @@ public sealed partial class NineNowChannel : IChannel, IRequiresMediaInfoCallbac
     }
 
     /// <inheritdoc />
-    public IEnumerable<ImageType> GetSupportedChannelImages() => [];
+    public IEnumerable<ImageType> GetSupportedChannelImages() => [ImageType.Primary];
 
     /// <inheritdoc />
     public Task<DynamicImageResponse> GetChannelImage(ImageType type, CancellationToken cancellationToken)
     {
-        return Task.FromResult(new DynamicImageResponse { HasImage = false, Stream = Stream.Null, Format = ImageFormat.Png });
+        if (type != ImageType.Primary)
+        {
+            return Task.FromResult(new DynamicImageResponse { HasImage = false, Stream = Stream.Null, Format = ImageFormat.Png });
+        }
+
+        Stream? logo = typeof(NineNowChannel).Assembly.GetManifestResourceStream(ChannelLogoResource);
+        return Task.FromResult(new DynamicImageResponse
+        {
+            HasImage = logo is not null,
+            Stream = logo ?? Stream.Null,
+            Format = ImageFormat.Png,
+        });
     }
 
     /// <inheritdoc />
